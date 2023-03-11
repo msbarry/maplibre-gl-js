@@ -28,6 +28,7 @@ uniform highp float u_aspect_ratio;
 uniform highp float u_camera_to_center_distance;
 uniform float u_fade_change;
 uniform vec2 u_texsize;
+uniform float u_zoom;
 
 varying vec2 v_data0;
 varying vec3 v_data1;
@@ -44,6 +45,11 @@ void main() {
     #pragma mapbox: initialize lowp float opacity
     #pragma mapbox: initialize lowp float halo_width
     #pragma mapbox: initialize lowp float halo_blur
+
+    float minzoom = a_pixeloffset.w * 0.01;
+    if (u_zoom < minzoom) {
+        return;
+    }
 
     vec2 a_pos = a_pos_offset.xy;
     vec2 a_offset = a_pos_offset.zw;

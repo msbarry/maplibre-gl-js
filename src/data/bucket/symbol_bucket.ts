@@ -648,7 +648,12 @@ class SymbolBucket implements Bucket {
         const sections = feature.text && feature.text.sections;
 
         for (let i = 0; i < quads.length; i++) {
-            const {tl, tr, bl, br, tex, pixelOffsetTL, pixelOffsetBR, minFontScaleX, minFontScaleY, glyphOffset, isSDF, sectionIndex} = quads[i];
+            let {tl, tr, bl, br, tex, pixelOffsetTL, pixelOffsetBR, minFontScaleX, minFontScaleY, glyphOffset, isSDF, sectionIndex} = quads[i];
+
+            if (typeof feature.properties.minzoom === 'number') {
+                minFontScaleY = feature.properties.minzoom * 100 / 256;
+            }
+
             const index = segment.vertexLength;
 
             const y = glyphOffset[1];
