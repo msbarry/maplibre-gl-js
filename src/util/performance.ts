@@ -1,4 +1,5 @@
 import type {RequestParameters} from '../util/ajax';
+import {isWorker} from './util';
 
 export type PerformanceMetrics = {
     loadTime: number;
@@ -117,3 +118,16 @@ export class RequestPerformance {
 }
 
 export default performance;
+
+let id = 0;
+
+export function perfMark(name: string): () => void {
+    const prefix = isWorker() ? `W${(self as any).workerId} ` : '';
+    const start = `${prefix}${name}#start${id++}`;
+    const end = `${prefix}${name}#end${id++}`;
+    performance.mark(start);
+    return () => {
+        performance.mark(end);
+        performance.measure(`${prefix}${name}`, start, end);
+    };
+}

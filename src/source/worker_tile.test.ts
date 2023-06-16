@@ -35,7 +35,7 @@ describe('worker tile', () => {
         }]);
 
         const tile = createWorkerTile();
-        tile.parse(createWrapper(), layerIndex, [], {} as Actor, (err, result) => {
+        tile.parse({tileID: {canonical: {z: 0, x: 0, y: 0}}} as any, createWrapper(), layerIndex, [], {} as Actor, (err, result) => {
             expect(err).toBeFalsy();
             expect(result.buckets[0]).toBeTruthy();
             done();
@@ -51,7 +51,7 @@ describe('worker tile', () => {
         }]);
 
         const tile = createWorkerTile();
-        tile.parse(createWrapper(), layerIndex, [], {} as Actor, (err, result) => {
+        tile.parse({tileID: {canonical: {z: 0, x: 0, y: 0}}} as any, createWrapper(), layerIndex, [], {} as Actor, (err, result) => {
             expect(err).toBeFalsy();
             expect(result.buckets).toHaveLength(0);
             done();
@@ -67,7 +67,7 @@ describe('worker tile', () => {
         }]);
 
         const tile = createWorkerTile();
-        tile.parse({layers: {}}, layerIndex, [], {} as Actor, (err, result) => {
+        tile.parse({tileID: {canonical: {z: 0, x: 0, y: 0}}} as any, {layers: {}}, layerIndex, [], {} as Actor, (err, result) => {
             expect(err).toBeFalsy();
             expect(result.buckets).toHaveLength(0);
             done();
@@ -93,7 +93,7 @@ describe('worker tile', () => {
         const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
         const tile = createWorkerTile();
-        tile.parse(data, layerIndex, [], {} as Actor, (err) => {
+        tile.parse({tileID: {canonical: {z: 0, x: 0, y: 0}}} as any, data, layerIndex, [], {} as Actor, (err) => {
             expect(err).toBeFalsy();
             expect(spy.mock.calls[0][0]).toMatch(/does not use vector tile spec v2/);
             done();

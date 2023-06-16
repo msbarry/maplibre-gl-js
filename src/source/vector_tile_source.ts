@@ -13,6 +13,7 @@ import type Tile from './tile';
 import type {Callback} from '../types/callback';
 import type {Cancelable} from '../types/cancelable';
 import type {VectorSourceSpecification, PromoteIdSpecification} from '@maplibre/maplibre-gl-style-spec';
+import {perfMark} from '../util/performance';
 
 /**
  * A source containing vector tiles in [Mapbox Vector Tile format](https://docs.mapbox.com/vector-tiles/reference/).
@@ -200,14 +201,26 @@ class VectorTileSource extends Evented implements Source {
         } else {
             tile.request = tile.actor.send('reloadTile', params, done.bind(this));
         }
+        const {z, x, y} = tile.tileID.canonical;
+        const overallPerf = perfMark(`tile ${this.id}/${z}/${x}/${y}`);
 
         function done(err, data) {
+            const callbackPerf = perfMark(`callback ${this.id}/${z}/${x}/${y}`);
+            const name = `${this.id}(${tile.tileID.canonical.z}/${tile.tileID.canonical.x}/${tile.tileID.canonical.y})`;
+            function finish() {
+                overallPerf();
+                callbackPerf();
+            }
+
             delete tile.request;
 
-            if (tile.aborted)
+            if (tile.aborted) {
+                finish();
                 return callback(null);
+            }
 
             if (err && err.status !== 404) {
+                finish();
                 return callback(err);
             }
 
@@ -215,7 +228,9 @@ class VectorTileSource extends Evented implements Source {
                 tile.resourceTiming = data.resourceTiming;
 
             if (this.map._refreshExpiredTiles && data) tile.setExpiryData(data);
+            const loadVectorDataPerf = perfMark(`loadVectorData ${this.id}/${z}/${x}/${y}`);
             tile.loadVectorData(data, this.map.painter);
+            loadVectorDataPerf();
 
             callback(null);
 
@@ -223,6 +238,7 @@ class VectorTileSource extends Evented implements Source {
                 this.loadTile(tile, tile.reloadCallback);
                 tile.reloadCallback = null;
             }
+            finish();
         }
     }
 

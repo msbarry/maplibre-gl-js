@@ -101,6 +101,10 @@ class Actor {
         const data = message.data,
             id = data.id;
 
+        if (data.workerId) {
+            (self as any).workerId = data.workerId;
+        }
+
         if (!id) {
             return;
         }

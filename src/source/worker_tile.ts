@@ -25,6 +25,7 @@ import type {
 } from '../source/worker_source';
 import type {PromoteIdSpecification} from '@maplibre/maplibre-gl-style-spec';
 import type {VectorTile} from '@mapbox/vector-tile';
+import {perfMark} from '../util/performance';
 
 class WorkerTile {
     tileID: OverscaledTileID;
@@ -61,7 +62,10 @@ class WorkerTile {
         this.promoteId = params.promoteId;
     }
 
-    parse(data: VectorTile, layerIndex: StyleLayerIndex, availableImages: Array<string>, actor: Actor, callback: WorkerTileCallback) {
+    parse(params: WorkerTileParameters, data: VectorTile, layerIndex: StyleLayerIndex, availableImages: Array<string>, actor: Actor, callback: WorkerTileCallback) {
+
+        const {z, x, y} = params.tileID.canonical;
+        const end = perfMark(`parse ${params.source}/${z}/${x}/${y}`);
         this.status = 'parsing';
         this.data = data;
 
@@ -88,6 +92,8 @@ class WorkerTile {
                 continue;
             }
 
+            const endParseSource = perfMark(`parseSource ${sourceLayerId} ${params.source}/${z}/${x}/${y}`);
+
             if (sourceLayer.version === 1) {
                 warnOnce(`Vector tile source "${this.source}" layer "${sourceLayerId}" ` +
                     'does not use vector tile spec v2 and therefore may have some rendering errors.');
@@ -103,6 +109,7 @@ class WorkerTile {
 
             for (const family of layerFamilies[sourceLayerId]) {
                 const layer = family[0];
+                const familyName = `${layer.type}/${layer.id}`;
 
                 if (layer.source !== this.source) {
                     warnOnce(`layer.source = ${layer.source} does not equal this.source = ${this.source}`);
@@ -111,8 +118,9 @@ class WorkerTile {
                 if (layer.maxzoom && this.zoom >= layer.maxzoom) continue;
                 if (layer.visibility === 'none') continue;
 
-                recalculateLayers(family, this.zoom, availableImages);
+                recalculateLayers(params, family, this.zoom, availableImages);
 
+                const endCreateBucket = perfMark(`bucket ${familyName} ${sourceLayerId} ${params.source}/${z}/${x}/${y}`);
                 const bucket = buckets[layer.id] = layer.createBucket({
                     index: featureIndex.bucketLayerIDs.length,
                     layers: family,
@@ -126,7 +134,9 @@ class WorkerTile {
 
                 bucket.populate(features, options, this.tileID.canonical);
                 featureIndex.bucketLayerIDs.push(family.map((l) => l.id));
+                endCreateBucket();
             }
+            endParseSource();
         }
 
         let error: Error;
@@ -183,13 +193,15 @@ class WorkerTile {
             if (error) {
                 return callback(error);
             } else if (glyphMap && iconMap && patternMap) {
+                const endPrepare = perfMark(`prepare ${params.source}/${z}/${x}/${y}`);
                 const glyphAtlas = new GlyphAtlas(glyphMap);
                 const imageAtlas = new ImageAtlas(iconMap, patternMap);
 
                 for (const key in buckets) {
                     const bucket = buckets[key];
                     if (bucket instanceof SymbolBucket) {
-                        recalculateLayers(bucket.layers, this.zoom, availableImages);
+                        recalculateLayers(params, bucket.layers, this.zoom, availableImages);
+                        const endSymbol = perfMark(`symbol ${key} ${params.source}/${z}/${x}/${y}`);
                         performSymbolLayout({
                             bucket,
                             glyphMap,
@@ -199,18 +211,22 @@ class WorkerTile {
                             showCollisionBoxes: this.showCollisionBoxes,
                             canonical: this.tileID.canonical
                         });
+                        endSymbol();
                     } else if (bucket.hasPattern &&
                         (bucket instanceof LineBucket ||
                          bucket instanceof FillBucket ||
                          bucket instanceof FillExtrusionBucket)) {
-                        recalculateLayers(bucket.layers, this.zoom, availableImages);
+                        recalculateLayers(params, bucket.layers, this.zoom, availableImages);
                         bucket.addFeatures(options, this.tileID.canonical, imageAtlas.patternPositions);
                     }
                 }
 
                 this.status = 'done';
+                const theBuckets = Object.values(buckets).filter(b => !b.isEmpty());
+                endPrepare();
+                const endSend = perfMark(`send ${params.source}/${z}/${x}/${y}`);
                 callback(null, {
-                    buckets: Object.values(buckets).filter(b => !b.isEmpty()),
+                    buckets: theBuckets,
                     featureIndex,
                     collisionBoxArray: this.collisionBoxArray,
                     glyphAtlasImage: glyphAtlas.image,
@@ -220,17 +236,24 @@ class WorkerTile {
                     iconMap: this.returnDependencies ? iconMap : null,
                     glyphPositions: this.returnDependencies ? glyphAtlas.positions : null
                 });
+                endSend();
             }
         }
+        end();
     }
 }
 
-function recalculateLayers(layers: ReadonlyArray<StyleLayer>, zoom: number, availableImages: Array<string>) {
+function recalculateLayers(params: WorkerTileParameters, layers: ReadonlyArray<StyleLayer>, zoom: number, availableImages: Array<string>) {
     // Layers are shared and may have been used by a WorkerTile with a different zoom.
     const parameters = new EvaluationParameters(zoom);
+    const {z, x, y} = params.tileID.canonical;
+    const endPrepare = perfMark(`recalcLayers ${params.source}/${z}/${x}/${y}`);
     for (const layer of layers) {
+        const end = perfMark(`recalc ${layer.id} ${params.source}/${z}/${x}/${y}`);
         layer.recalculate(parameters, availableImages);
+        end();
     }
+    endPrepare();
 }
 
 export default WorkerTile;

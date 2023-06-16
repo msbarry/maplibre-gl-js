@@ -4,7 +4,7 @@ import vt from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
 import WorkerTile from './worker_tile';
 import {extend} from '../util/util';
-import {RequestPerformance} from '../util/performance';
+import {RequestPerformance, perfMark} from '../util/performance';
 
 import type {
     WorkerSource,
@@ -43,8 +43,12 @@ function loadVectorTile(params: WorkerTileParameters, callback: LoadVectorDataCa
         if (err) {
             callback(err);
         } else if (data) {
+            const {z, x, y} = params.tileID.canonical;
+            const end = perfMark(`vtparse ${params.source}/${z}/${x}/${y}`);
+            const vectorTile = new vt.VectorTile(new Protobuf(data));
+            end();
             callback(null, {
-                vectorTile: new vt.VectorTile(new Protobuf(data)),
+                vectorTile,
                 rawData: data,
                 cacheControl,
                 expires
@@ -97,6 +101,8 @@ class VectorTileWorkerSource implements WorkerSource {
      * @private
      */
     loadTile(params: WorkerTileParameters, callback: WorkerTileCallback) {
+        const {z, x, y} = params.tileID.canonical;
+        const end = perfMark(`load ${params.source}/${z}/${x}/${y}`);
         const uid = params.uid;
 
         if (!this.loading)
@@ -106,12 +112,18 @@ class VectorTileWorkerSource implements WorkerSource {
             new RequestPerformance(params.request) : false;
 
         const workerTile = this.loading[uid] = new WorkerTile(params);
+        end();
         workerTile.abort = this.loadVectorData(params, (err, response) => {
+            const endHandle = perfMark(`handle ${params.source}/${z}/${x}/${y}`);
             delete this.loading[uid];
+            function finish() {
+                endHandle();
+            }
 
             if (err || !response) {
                 workerTile.status = 'done';
                 this.loaded[uid] = workerTile;
+                finish();
                 return callback(err);
             }
 
@@ -130,7 +142,7 @@ class VectorTileWorkerSource implements WorkerSource {
             }
 
             workerTile.vectorTile = response.vectorTile;
-            workerTile.parse(response.vectorTile, this.layerIndex, this.availableImages, this.actor, (err, result) => {
+            workerTile.parse(params, response.vectorTile, this.layerIndex, this.availableImages, this.actor, (err, result) => {
                 if (err || !result) return callback(err);
 
                 // Transferring a copy of rawTileData because the worker needs to retain its copy.
@@ -139,6 +151,7 @@ class VectorTileWorkerSource implements WorkerSource {
 
             this.loaded = this.loaded || {};
             this.loaded[uid] = workerTile;
+            finish();
         }) as AbortVectorData;
     }
 
@@ -158,7 +171,7 @@ class VectorTileWorkerSource implements WorkerSource {
                 const reloadCallback = workerTile.reloadCallback;
                 if (reloadCallback) {
                     delete workerTile.reloadCallback;
-                    workerTile.parse(workerTile.vectorTile, vtSource.layerIndex, this.availableImages, vtSource.actor, reloadCallback);
+                    workerTile.parse(params, workerTile.vectorTile, vtSource.layerIndex, this.availableImages, vtSource.actor, reloadCallback);
                 }
                 callback(err, data);
             };
@@ -168,7 +181,7 @@ class VectorTileWorkerSource implements WorkerSource {
             } else if (workerTile.status === 'done') {
                 // if there was no vector tile data on the initial load, don't try and re-parse tile
                 if (workerTile.vectorTile) {
-                    workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, done);
+                    workerTile.parse(params, workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, done);
                 } else {
                     done();
                 }

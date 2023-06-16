@@ -27,7 +27,9 @@ export default class WorkerPool {
             // client code has had a chance to set it.
             this.workers = [];
             while (this.workers.length < WorkerPool.workerCount) {
-                this.workers.push(webWorkerFactory());
+                const worker = webWorkerFactory();
+                this.workers.push(worker);
+                worker.postMessage({workerId: this.workers.length});
             }
         }
 
