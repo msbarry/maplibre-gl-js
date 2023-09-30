@@ -29,6 +29,60 @@ export class RasterDEMTileWorkerSource {
     }
 
     getImageData(imgBitmap: ImageBitmap): RGBAImage {
+        if (typeof VideoFrame !== 'undefined') {
+            const start = performance.now();
+            const vf = new VideoFrame(imgBitmap, {timestamp:0});
+            try {
+                const size = vf.allocationSize();
+                const rawData = new Uint8Array(size);
+                vf.copyTo(rawData);
+                console.log('get raw pixels took', performance.now() - start);
+                // OffscreenCanvas.getImageData(-1, -1, width+2, height+2) adds a 1px buffer around the edge
+                // so this code is needed to add the 1px buffer explicitly. Also the result may come back in
+                // BRG format so we need to convert to RGB.
+                // getting the raw pixels takes 0-2ms, but changing this format takes 10-20ms
+                const data = new Uint8Array((imgBitmap.width + 2) * (imgBitmap.height + 2) * 4);
+                switch (vf.format) {
+                    case 'BGRA':
+                    case 'BGRX':
+                        for (let r = 0; r < imgBitmap.height; r++) {
+                            const inRowStart = r * imgBitmap.width * 4;
+                            const outRowStart = (r + 1) * (imgBitmap.width + 2) * 4;
+                            let inPixelStart = inRowStart;
+                            let outPixelStart = outRowStart + 4;
+                            for (let c = 0; c < imgBitmap.width; c++) {
+                                data[outPixelStart] = rawData[inPixelStart + 2];
+                                data[outPixelStart + 1] = rawData[inPixelStart + 1];
+                                data[outPixelStart + 2] = rawData[inPixelStart];
+                                outPixelStart += 4;
+                                inPixelStart += 4;
+                            }
+                        }
+                        console.log('BRG', performance.now() - start);
+                        return new RGBAImage({width: imgBitmap.width + 2, height: imgBitmap.height + 2}, data);
+                    case 'RGBA':
+                    case 'RGBX':
+                        for (let r = 0; r < imgBitmap.height; r++) {
+                            const inRowStart = r * imgBitmap.width * 4;
+                            const outRowStart = (r + 1) * (imgBitmap.width + 2) * 4;
+                            let inPixelStart = inRowStart;
+                            let outPixelStart = outRowStart + 4;
+                            for (let c = 0; c < imgBitmap.width; c++) {
+                                data[outPixelStart] = rawData[inPixelStart];
+                                data[outPixelStart + 1] = rawData[inPixelStart + 1];
+                                data[outPixelStart + 2] = rawData[inPixelStart + 2];
+                                outPixelStart += 4;
+                                inPixelStart += 4;
+                            }
+                        }
+                        console.log('RGB', performance.now() - start);
+                        return new RGBAImage({width: imgBitmap.width + 2, height: imgBitmap.height + 2}, data);
+                    }
+            } finally {
+                vf.close();
+            }
+        }
+        const start = performance.now();
         // Lazily initialize OffscreenCanvas
         if (!this.offscreenCanvas || !this.offscreenCanvasContext) {
             // Dem tiles are typically 256x256
