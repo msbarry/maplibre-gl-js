@@ -10,16 +10,14 @@ const EARCUT_MAX_RINGS = 500;
 import {register} from '../../util/web_worker_transfer';
 import {hasPattern, addPatternDependencies} from './pattern_bucket_features';
 import {loadGeometry} from '../load_geometry';
-import {toEvaluationFeature} from '../evaluation_feature';
-import {EvaluationParameters} from '../../style/evaluation_parameters';
 
 import type {CanonicalTileID} from '../../source/tile_id';
 import type {
     Bucket,
     BucketParameters,
     BucketFeature,
-    IndexedFeature,
-    PopulateParameters
+    PopulateParameters,
+    IndexedFeatureForLayer
 } from '../bucket';
 import type {FillStyleLayer} from '../../style/style_layer/fill_style_layer';
 import type {Context} from '../../gl/context';
@@ -73,18 +71,13 @@ export class FillBucket implements Bucket {
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
     }
 
-    populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
+    populate(features: Array<IndexedFeatureForLayer>, options: PopulateParameters, canonical: CanonicalTileID) {
         this.hasPattern = hasPattern('fill', this.layers, options);
         const fillSortKey = this.layers[0].layout.get('fill-sort-key');
         const sortFeaturesByKey = !fillSortKey.isConstant();
         const bucketFeatures: BucketFeature[] = [];
 
-        for (const {feature, id, index, sourceLayerIndex} of features) {
-            const needGeometry = this.layers[0]._featureFilter.needGeometry;
-            const evaluationFeature = toEvaluationFeature(feature, needGeometry);
-
-            if (!this.layers[0]._featureFilter.filter(new EvaluationParameters(this.zoom), evaluationFeature, canonical)) continue;
-
+        for (const {feature: {feature, id, index, sourceLayerIndex}, needGeometry, evaluationFeature} of features) {
             const sortKey = sortFeaturesByKey ?
                 fillSortKey.evaluate(evaluationFeature, {}, canonical, options.availableImages) :
                 undefined;
@@ -120,7 +113,7 @@ export class FillBucket implements Bucket {
             }
 
             const feature = features[index].feature;
-            options.featureIndex.insert(feature, geometry, index, sourceLayerIndex, this.index);
+            options.featureIndex.insert(feature.feature, geometry, index, sourceLayerIndex, this.index);
         }
     }
 

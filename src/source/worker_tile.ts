@@ -12,7 +12,7 @@ import {GlyphAtlas} from '../render/glyph_atlas';
 import {EvaluationParameters} from '../style/evaluation_parameters';
 import {OverscaledTileID} from './tile_id';
 
-import type {Bucket} from '../data/bucket';
+import type {Bucket, IndexedFeature, IndexedFeatureForLayer} from '../data/bucket';
 import type {IActor} from '../util/actor';
 import type {StyleLayer} from '../style/style_layer';
 import type {StyleLayerIndex} from '../style/style_layer_index';
@@ -23,6 +23,7 @@ import type {
 import type {PromoteIdSpecification} from '@maplibre/maplibre-gl-style-spec';
 import type {VectorTile} from '@mapbox/vector-tile';
 import type {GetGlyphsResponse, GetImagesResponse} from '../util/actor_messages';
+import {toEvaluationFeature} from '../data/evaluation_feature';
 
 export class WorkerTile {
     tileID: OverscaledTileID;
@@ -93,13 +94,14 @@ export class WorkerTile {
             }
 
             const sourceLayerIndex = sourceLayerCoder.encode(sourceLayerId);
-            const features = [];
+            const features: IndexedFeature[] = [];
             for (let index = 0; index < sourceLayer.length; index++) {
                 const feature = sourceLayer.feature(index);
                 const id = featureIndex.getId(feature, sourceLayerId);
-                features.push({feature, id, index, sourceLayerIndex});
+                features.push({feature, id, index, sourceLayerIndex, buckets: []});
             }
 
+            const toPopulate: [Bucket, Array<IndexedFeatureForLayer>][] = [];
             for (const family of layerFamilies[sourceLayerId]) {
                 const layer = family[0];
 
@@ -123,8 +125,29 @@ export class WorkerTile {
                     sourceID: this.source
                 });
 
-                bucket.populate(features, options, this.tileID.canonical);
+                const output: IndexedFeatureForLayer[] = [];
+                toPopulate.push([bucket, output]);
+                for (const feature of features) {
+                    const needGeometry = bucket.layers[0]._featureFilter.needGeometry;
+                    const evaluationFeature = toEvaluationFeature(feature.feature, needGeometry);
+                    feature.buckets.push({
+                        bucket, evaluationFeature, needGeometry, feature, output
+                    });
+                }
                 featureIndex.bucketLayerIDs.push(family.map((l) => l.id));
+            }
+
+            const params = new EvaluationParameters(this.zoom);
+            for (const f of features) {
+                for (const feature of f.buckets) {
+                    if (feature.bucket.layers[0]._featureFilter.filter(params, feature.evaluationFeature, this.tileID.canonical)) {
+                        feature.output.push(feature);
+                    }
+                }
+            }
+
+            for (const [bucket, features] of toPopulate) {
+                bucket.populate(features, options, this.tileID.canonical);
             }
         }
 

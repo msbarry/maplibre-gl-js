@@ -3,7 +3,7 @@ import type Point from '@mapbox/point-geometry';
 import type {VectorTileFeature} from '@mapbox/vector-tile';
 import type {Feature} from '@maplibre/maplibre-gl-style-spec';
 
-type EvaluationFeature = Feature & { geometry: Array<Array<Point>> };
+export type EvaluationFeature = Feature & { geometry: Array<Array<Point>> };
 /**
  * Construct a new feature based on a VectorTileFeature for expression evaluation, the geometry of which
  * will be loaded based on necessity.

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import Protobuf from 'pbf';
-import {VectorTile} from '@mapbox/vector-tile';
+import {VectorTile, VectorTileFeature} from '@mapbox/vector-tile';
 import {SymbolBucket} from './symbol_bucket';
 import {CollisionBoxArray} from '../../data/array_types.g';
 import {performSymbolLayout} from '../../symbol/symbol_layout';
@@ -14,14 +14,22 @@ import {FeatureIndex} from '../../data/feature_index';
 import {createSymbolBucket, createSymbolIconBucket} from '../../../test/unit/lib/create_symbol_layer';
 import {RGBAImage} from '../../util/image';
 import {ImagePosition} from '../../render/image_atlas';
-import {IndexedFeature, PopulateParameters} from '../bucket';
+import {IndexedFeature, IndexedFeatureForLayer, PopulateParameters} from '../bucket';
 import {StyleImage} from '../../style/style_image';
 import glyphs from '../../../test/unit/assets/fontstack-glyphs.json' assert {type: 'json'};
 import {StyleGlyph} from '../../style/style_glyph';
+import {toEvaluationFeature} from '../evaluation_feature';
 
 // Load a point feature from fixture tile.
 const vt = new VectorTile(new Protobuf(fs.readFileSync(path.resolve(__dirname, '../../../test/unit/assets/mbsv5-6-18-23.vector.pbf'))));
-const feature = vt.layers.place_label.feature(10);
+const vtf = vt.layers.place_label.feature(10);
+const feature: IndexedFeatureForLayer = {
+    bucket: null,
+    evaluationFeature: toEvaluationFeature(vtf, false),
+    feature: {feature: vtf, buckets: [], id: '', index: 1, sourceLayerIndex: 1},
+    needGeometry: false,
+    output: []
+};
 
 /*eslint new-cap: 0*/
 const collisionBoxArray = new CollisionBoxArray();
@@ -40,22 +48,30 @@ function bucketSetup(text = 'abcde') {
     return createSymbolBucket('test', 'Test', text, collisionBoxArray);
 }
 
-function createIndexedFeature(id, index, iconId) {
+function createIndexedFeature(id, index, iconId): IndexedFeatureForLayer {
+    const vt: VectorTileFeature = {
+        extent: 8192,
+        type: 1,
+        id,
+        properties: {
+            icon: iconId
+        },
+        loadGeometry () {
+            return [[{x: 0, y: 0}]] as any;
+        }
+    } as any;
     return {
         feature: {
-            extent: 8192,
-            type: 1,
+            feature: vt,
             id,
-            properties: {
-                icon: iconId
-            },
-            loadGeometry () {
-                return [[{x: 0, y: 0}]];
-            }
+            index,
+            sourceLayerIndex: 0,
+            buckets: []
         },
-        id,
-        index,
-        sourceLayerIndex: 0
+        bucket: null,
+        evaluationFeature: toEvaluationFeature(vt, true),
+        needGeometry: true,
+        output: []
     };
 }
 
@@ -69,7 +85,7 @@ describe('SymbolBucket', () => {
         const crossTileSymbolIndex = new CrossTileSymbolIndex();
 
         // add feature from bucket A
-        bucketA.populate([{feature} as IndexedFeature], options, undefined as any);
+        bucketA.populate([feature], options, undefined as any);
         performSymbolLayout(
             {
                 bucket: bucketA,
@@ -82,7 +98,7 @@ describe('SymbolBucket', () => {
         tileA.collisionBoxArray = collisionBoxArray;
 
         // add same feature from bucket B
-        bucketB.populate([{feature} as IndexedFeature], options, undefined as any);
+        bucketB.populate([feature], options, undefined as any);
         performSymbolLayout({
             bucket: bucketB, glyphMap: stacks, glyphPositions: {}
         } as any);
@@ -117,7 +133,7 @@ describe('SymbolBucket', () => {
         const bucket = bucketSetup() as any as SymbolBucket;
         const options = {iconDependencies: {}, glyphDependencies: {}} as PopulateParameters;
 
-        bucket.populate([{feature} as IndexedFeature], options, undefined as any);
+        bucket.populate([feature], options, undefined as any);
         const fakeGlyph = {rect: {w: 10, h: 10}, metrics: {left: 10, top: 10, advance: 10}};
         performSymbolLayout({
             bucket,
@@ -154,7 +170,7 @@ describe('SymbolBucket', () => {
                 createIndexedFeature(0, 0, 'a'),
                 createIndexedFeature(1, 1, 'b'),
                 createIndexedFeature(2, 2, 'a')
-            ] as any as IndexedFeature[],
+            ] as any as IndexedFeatureForLayer[],
             options, undefined as any
         );
 
@@ -196,7 +212,7 @@ describe('SymbolBucket', () => {
                 createIndexedFeature(0, 0, 'a'),
                 createIndexedFeature(1, 1, 'b'),
                 createIndexedFeature(2, 2, 'a')
-            ] as any as IndexedFeature[],
+            ] as any as IndexedFeatureForLayer[],
             options, undefined as unknown as CanonicalTileID
         );
 
@@ -214,8 +230,8 @@ describe('SymbolBucket', () => {
         const rtlBucket = bucketSetup('مرحبا');
         const ltrBucket = bucketSetup('hello');
         const options = {iconDependencies: {}, glyphDependencies: {}} as PopulateParameters;
-        rtlBucket.populate([{feature} as IndexedFeature], options, undefined as any);
-        ltrBucket.populate([{feature} as IndexedFeature], options, undefined as any);
+        rtlBucket.populate([feature], options, undefined as any);
+        ltrBucket.populate([feature], options, undefined as any);
 
         expect(rtlBucket.hasRTLText).toBeTruthy();
         expect(ltrBucket.hasRTLText).toBeFalsy();
@@ -226,7 +242,7 @@ describe('SymbolBucket', () => {
         const rtlBucket = bucketSetup('مرحبا');
         const options = {iconDependencies: {}, glyphDependencies: {}} as PopulateParameters;
         rtlBucket.createArrays();
-        rtlBucket.populate([{feature} as IndexedFeature], options, undefined as any);
+        rtlBucket.populate([feature], options, undefined as any);
 
         expect(rtlBucket.isEmpty()).toBeFalsy();
         expect(rtlBucket.symbolInstances).toHaveLength(0);
@@ -235,7 +251,7 @@ describe('SymbolBucket', () => {
     test('SymbolBucket detects rtl text mixed with ltr text', () => {
         const mixedBucket = bucketSetup('مرحبا translates to hello');
         const options = {iconDependencies: {}, glyphDependencies: {}} as PopulateParameters;
-        mixedBucket.populate([{feature} as IndexedFeature], options, undefined as any);
+        mixedBucket.populate([feature], options, undefined as any);
 
         expect(mixedBucket.hasRTLText).toBeTruthy();
     });

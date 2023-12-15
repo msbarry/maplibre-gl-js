@@ -26,7 +26,6 @@ import {mergeLines} from '../../symbol/merge_lines';
 import {allowsVerticalWritingMode, stringContainsRTLText} from '../../util/script_detection';
 import {WritingMode} from '../../symbol/shaping';
 import {loadGeometry} from '../load_geometry';
-import {toEvaluationFeature} from '../evaluation_feature';
 import mvt from '@mapbox/vector-tile';
 const vectorTileFeatureTypes = mvt.VectorTileFeature.types;
 import {verticalizedCharacterMap} from '../../util/verticalize_punctuation';
@@ -34,7 +33,6 @@ import {Anchor} from '../../symbol/anchor';
 import {getSizeData, MAX_PACKED_SIZE} from '../../symbol/symbol_size';
 
 import {register} from '../../util/web_worker_transfer';
-import {EvaluationParameters} from '../../style/evaluation_parameters';
 import {Formatted, ResolvedImage} from '@maplibre/maplibre-gl-style-spec';
 import {rtlWorkerPlugin} from '../../source/rtl_text_plugin_worker';
 import {mat4} from 'gl-matrix';
@@ -43,7 +41,7 @@ import type {CanonicalTileID} from '../../source/tile_id';
 import type {
     Bucket,
     BucketParameters,
-    IndexedFeature,
+    IndexedFeatureForLayer,
     PopulateParameters
 } from '../bucket';
 import type {CollisionBoxArray, CollisionBox, SymbolInstance} from '../array_types.g';
@@ -429,7 +427,7 @@ export class SymbolBucket implements Bucket {
         }
     }
 
-    populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
+    populate(features: Array<IndexedFeatureForLayer>, options: PopulateParameters, canonical: CanonicalTileID) {
         const layer = this.layers[0];
         const layout = layer.layout;
 
@@ -457,16 +455,8 @@ export class SymbolBucket implements Bucket {
         const icons = options.iconDependencies;
         const stacks = options.glyphDependencies;
         const availableImages = options.availableImages;
-        const globalProperties = new EvaluationParameters(this.zoom);
 
-        for (const {feature, id, index, sourceLayerIndex} of features) {
-
-            const needGeometry = layer._featureFilter.needGeometry;
-            const evaluationFeature = toEvaluationFeature(feature, needGeometry);
-            if (!layer._featureFilter.filter(globalProperties, evaluationFeature, canonical)) {
-                continue;
-            }
-
+        for (const {feature: {feature, id, index, sourceLayerIndex}, needGeometry, evaluationFeature} of features) {
             if (!needGeometry)  evaluationFeature.geometry = loadGeometry(feature);
 
             let text: Formatted | void;

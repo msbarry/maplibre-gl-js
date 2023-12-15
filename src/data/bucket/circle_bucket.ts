@@ -5,18 +5,16 @@ import {SegmentVector} from '../segment';
 import {ProgramConfigurationSet} from '../program_configuration';
 import {TriangleIndexArray} from '../index_array_type';
 import {loadGeometry} from '../load_geometry';
-import {toEvaluationFeature} from '../evaluation_feature';
 import {EXTENT} from '../extent';
 import {register} from '../../util/web_worker_transfer';
-import {EvaluationParameters} from '../../style/evaluation_parameters';
 
 import type {CanonicalTileID} from '../../source/tile_id';
 import type {
     Bucket,
     BucketParameters,
     BucketFeature,
-    IndexedFeature,
-    PopulateParameters
+    PopulateParameters,
+    IndexedFeatureForLayer
 } from '../bucket';
 import type {CircleStyleLayer} from '../../style/style_layer/circle_style_layer';
 import type {HeatmapStyleLayer} from '../../style/style_layer/heatmap_style_layer';
@@ -76,7 +74,7 @@ export class CircleBucket<Layer extends CircleStyleLayer | HeatmapStyleLayer> im
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
     }
 
-    populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
+    populate(features: Array<IndexedFeatureForLayer>, options: PopulateParameters, canonical: CanonicalTileID) {
         const styleLayer = this.layers[0];
         const bucketFeatures: BucketFeature[] = [];
         let circleSortKey = null;
@@ -88,11 +86,7 @@ export class CircleBucket<Layer extends CircleStyleLayer | HeatmapStyleLayer> im
             sortFeaturesByKey = !circleSortKey.isConstant();
         }
 
-        for (const {feature, id, index, sourceLayerIndex} of features) {
-            const needGeometry = this.layers[0]._featureFilter.needGeometry;
-            const evaluationFeature = toEvaluationFeature(feature, needGeometry);
-
-            if (!this.layers[0]._featureFilter.filter(new EvaluationParameters(this.zoom), evaluationFeature, canonical)) continue;
+        for (const {feature: {feature, id, index, sourceLayerIndex}, needGeometry, evaluationFeature} of features) {
 
             const sortKey = sortFeaturesByKey ?
                 circleSortKey.evaluate(evaluationFeature, {}, canonical) :
@@ -122,7 +116,7 @@ export class CircleBucket<Layer extends CircleStyleLayer | HeatmapStyleLayer> im
             const feature = features[index].feature;
 
             this.addFeature(bucketFeature, geometry, index, canonical);
-            options.featureIndex.insert(feature, geometry, index, sourceLayerIndex, this.index);
+            options.featureIndex.insert(feature.feature, geometry, index, sourceLayerIndex, this.index);
         }
     }
 

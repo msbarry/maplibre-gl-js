@@ -8,6 +8,8 @@ import type {ImagePosition} from '../render/image_atlas';
 import type {CanonicalTileID} from '../source/tile_id';
 import type {VectorTileFeature, VectorTileLayer} from '@mapbox/vector-tile';
 import Point from '@mapbox/point-geometry';
+import {EvaluationContext} from '@maplibre/maplibre-gl-style-spec';
+import {EvaluationFeature} from './evaluation_feature';
 
 export type BucketParameters<Layer extends TypedStyleLayer> = {
     index: number;
@@ -33,6 +35,15 @@ export type IndexedFeature = {
     id: number | string;
     index: number;
     sourceLayerIndex: number;
+    buckets: IndexedFeatureForLayer[];
+};
+
+export type IndexedFeatureForLayer = {
+    bucket: Bucket;
+    output: IndexedFeatureForLayer[];
+    feature: IndexedFeature;
+    needGeometry: boolean;
+    evaluationFeature: EvaluationFeature;
 };
 
 export type BucketFeature = {
@@ -79,7 +90,7 @@ export interface Bucket {
     readonly layers: Array<any>;
     readonly stateDependentLayers: Array<any>;
     readonly stateDependentLayerIds: Array<string>;
-    populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID): void;
+    populate(features: Array<IndexedFeatureForLayer>, options: PopulateParameters, canonical: CanonicalTileID): void;
     update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}): void;
     isEmpty(): boolean;
     upload(context: Context): void;
