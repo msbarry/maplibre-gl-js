@@ -125,6 +125,10 @@ export class WorkerTile {
                     sourceID: this.source
                 });
 
+                // to take advantage of optimization in
+                // https://github.com/maplibre/maplibre-style-spec/compare/main...msbarry:maplibre-style-spec:faster?expand=1
+                // we need to group layers by feature first, then run filters in the next for loop so that we run all of
+                // the layers over a feature together.
                 const output: IndexedFeatureForLayer[] = [];
                 toPopulate.push([bucket, output]);
                 for (const feature of features) {
