@@ -122,10 +122,6 @@ Adds large-scale WebGL-powered geospatial data visualization framework.
 Render a geographic flow map visualization from a spreadsheet published on Google Sheets.
 <br/><small>[View on GitHub](https://github.com/ilyabo/flowmap.blue)</small>
     
-#### maplibre-contour
-Adds elevation contour lines to a map from raster-dem tiles.
-<br/><small>[View on GitHub](https://github.com/onthegomap/maplibre-contour)</small>
-    
   
 ## Layer Types
 
