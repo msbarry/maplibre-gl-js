@@ -2,6 +2,7 @@ import {Actor, ActorTarget, IActor} from '../util/actor';
 import {StyleLayerIndex} from '../style/style_layer_index';
 import {VectorTileWorkerSource} from './vector_tile_worker_source';
 import {RasterDEMTileWorkerSource} from './raster_dem_tile_worker_source';
+import {ContourTileWorkerSource} from './contour_tile_worker_source';
 import {rtlWorkerPlugin, RTLTextPlugin} from './rtl_text_plugin_worker';
 import {GeoJSONWorkerSource, LoadGeoJSONParameters} from './geojson_worker_source';
 import {isWorker} from '../util/util';
@@ -24,6 +25,12 @@ import {
     type RemoveSourceParams,
     type UpdateLayersParamaeters
 } from '../util/actor_messages';
+
+const WorkerSourceTypes = {
+    'vector': VectorTileWorkerSource,
+    'contour': ContourTileWorkerSource,
+    'geojson': GeoJSONWorkerSource,
+};
 
 /**
  * The Worker class responsidble for background thread related execution
@@ -258,17 +265,8 @@ export default class Worker {
                     return this.actor.sendAsync(message, abortController);
                 }
             };
-            switch (sourceType) {
-                case 'vector':
-                    this.workerSources[mapId][sourceType][sourceName] = new VectorTileWorkerSource(actor, this._getLayerIndex(mapId), this._getAvailableImages(mapId));
-                    break;
-                case 'geojson':
-                    this.workerSources[mapId][sourceType][sourceName] = new GeoJSONWorkerSource(actor, this._getLayerIndex(mapId), this._getAvailableImages(mapId));
-                    break;
-                default:
-                    this.workerSources[mapId][sourceType][sourceName] = new (this.externalWorkerSourceTypes[sourceType])(actor, this._getLayerIndex(mapId), this._getAvailableImages(mapId));
-                    break;
-            }
+            const WorkerSourceConstructor = WorkerSourceTypes[sourceType] || this.externalWorkerSourceTypes[sourceType];
+            this.workerSources[mapId][sourceType][sourceName] = new WorkerSourceConstructor(actor, this._getLayerIndex(mapId), this._getAvailableImages(mapId));
         }
 
         return this.workerSources[mapId][sourceType][sourceName];

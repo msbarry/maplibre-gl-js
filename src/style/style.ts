@@ -828,7 +828,7 @@ export class Style extends Evented {
             throw new Error(`The type property must be defined, but only the following properties were given: ${Object.keys(source).join(', ')}.`);
         }
 
-        const builtIns = ['vector', 'raster', 'geojson', 'video', 'image'];
+        const builtIns = ['vector', 'raster', 'geojson', 'contour', 'video', 'image'];
         const shouldValidate = builtIns.indexOf(source.type) >= 0;
         if (shouldValidate && this._validate(validateStyle.source, `sources.${id}`, source, null, options)) return;
         if (this.map && this.map._collectResourceTiming) (source as any).collectResourceTiming = true;
@@ -1199,6 +1199,10 @@ export class Style extends Evented {
         const sourceType = sourceCache.getSource().type;
         if (sourceType === 'geojson' && sourceLayer) {
             this.fire(new ErrorEvent(new Error('GeoJSON sources cannot have a sourceLayer parameter.')));
+            return;
+        }
+        if (sourceType === 'contour' && sourceLayer) {
+            this.fire(new ErrorEvent(new Error('Contour sources cannot have a sourceLayer parameter.')));
             return;
         }
         if (sourceType === 'vector' && !sourceLayer) {
