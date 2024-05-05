@@ -54,6 +54,7 @@ export class ContourTileSource extends Evented implements Source {
         this.maxzoom = 22;
         this.tileSize = 512;
         this.overzoom = typeof options.overzoom === 'number' ? options.overzoom : 1;
+        console.log('overzoom', this.overzoom);
         this.reparseOverscaled = true;
         this.isTileClipped = true;
         this._loaded = false;
@@ -63,7 +64,7 @@ export class ContourTileSource extends Evented implements Source {
         if (unit === 'meters') {
             this.unit = 1;
         } else if (unit === 'feet') {
-            this.unit = 1 / 0.3048;
+            this.unit = 0.3048;
         } else if (typeof unit === 'number') {
             this.unit = unit;
         } else {
@@ -100,6 +101,7 @@ export class ContourTileSource extends Evented implements Source {
             }
             this._loaded = true;
             this.minzoom = Math.max(this.minzoom, demSource.minzoom);
+            this.maxzoom = Math.min(22, demSource.maxzoom + 8);
             this.tileBounds = demSource.tileBounds;
             this.map.style.sourceCaches[this.id].clearTiles();
             console.log('ContourTileSource.loaded!!');
@@ -154,8 +156,6 @@ export class ContourTileSource extends Evented implements Source {
             const data = await tile.actor.sendAsync({type: messageType, data: params}, abortController);
             console.log('loaded', data);
             delete tile.abortController;
-
-            // TODO why arent symbols loading?
 
             if (!tile.aborted) {
                 tile.loadVectorData(data, this.map.painter, messageType ===  MessageType.reloadTile);

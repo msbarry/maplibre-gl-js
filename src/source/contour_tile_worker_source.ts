@@ -39,27 +39,30 @@ export class ContourTileWorkerSource extends VectorTileWorkerSource {
         const options = params.contourOptions;
         const subZ = canonical.z - options.demTileID.z;
         const div = 1 << subZ;
+        const start = Date.now();
         let virtualTile = HeightTile.fromRawDem(options.dem)
             .split(subZ, canonical.x % div, canonical.y % div);
-        if (virtualTile.width >= 100) {
+        if (virtualTile.width >= 200) {
             virtualTile = virtualTile.materialize(2);
         } else {
-            while (virtualTile.width < 100) {
+            while (virtualTile.width < 200) {
                 virtualTile = virtualTile.subsamplePixelCenters(2).materialize(2);
             }
         }
 
         virtualTile = virtualTile
             .averagePixelCentersToGrid()
-            .scaleElevation(options.unit)
+            .scaleElevation(1 / options.unit)
             .materialize(1);
+
+        const mid = Date.now();
 
         const isolines = generateIsolines(options.interval, virtualTile);
         const vectorTile = new ContourLineWrapper(isolines, options);
-        console.log('isolines', isolines, vectorTile);
+        console.log('isolines', mid - start, Date.now() - mid);
         // Encode the geojson-vt tile into binary vector tile form.  This
         // is a convenience that allows `FeatureIndex` to operate the same way
-        // across `VectorTileSource` and `GeoJSONSource` data.
+        // across different vector tile sources.
         let pbf = vtpbf(vectorTile);
         if (pbf.byteOffset !== 0 || pbf.byteLength !== pbf.buffer.byteLength) {
             pbf = new Uint8Array(pbf);
