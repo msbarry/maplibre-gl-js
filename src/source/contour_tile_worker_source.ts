@@ -40,6 +40,7 @@ export class ContourTileWorkerSource extends VectorTileWorkerSource {
         const subZ = canonical.z - options.demTileID.z;
         const div = 1 << subZ;
         const start = Date.now();
+        // TODO how to do sub-pixel divide?
         let virtualTile = HeightTile.fromRawDem(options.dem)
             .split(subZ, canonical.x % div, canonical.y % div);
         if (virtualTile.width >= 200) {

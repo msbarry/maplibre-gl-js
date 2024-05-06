@@ -101,6 +101,8 @@ export class ContourTileSource extends Evented implements Source {
             }
             this._loaded = true;
             this.minzoom = Math.max(this.minzoom, demSource.minzoom);
+            // TODO pick a max zoom from demSource.maxzoom + 5 (for smoothness) to 22
+            // based on whether interval/index contours change at those levels
             this.maxzoom = Math.min(22, demSource.maxzoom + 8);
             this.tileBounds = demSource.tileBounds;
             this.map.style.sourceCaches[this.id].clearTiles();
